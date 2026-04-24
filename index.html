@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Link Gallery with Tags</title>
+<title>Link Gallery Pro+</title>
 
 <style>
   body {
@@ -13,15 +13,13 @@
     background: #f4f4f4;
   }
 
-  h1 {
-    margin-bottom: 10px;
-  }
+  h1 { margin-bottom: 10px; }
 
-  .form {
+  .form, .toolbar {
     display: grid;
     gap: 10px;
-    max-width: 600px;
-    margin-bottom: 20px;
+    max-width: 700px;
+    margin-bottom: 15px;
   }
 
   input {
@@ -37,13 +35,11 @@
     border: none;
   }
 
-  button:hover {
-    background: #555;
-  }
+  button:hover { background: #555; }
 
-  .search {
-    max-width: 600px;
-    margin-bottom: 20px;
+  .toolbar {
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
   }
 
   .grid {
@@ -57,69 +53,90 @@
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    text-decoration: none;
-    color: black;
     display: flex;
     flex-direction: column;
+    position: relative;
   }
 
-  .card img {
+  .card a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .thumb {
     width: 100%;
     height: 120px;
     object-fit: cover;
+    background: #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 12px;
   }
 
   .card-title {
-    padding: 8px 10px 2px;
+    padding: 8px;
     font-weight: bold;
     font-size: 14px;
     text-align: center;
   }
 
   .tags {
-    padding: 0 10px 10px;
     font-size: 11px;
     color: #666;
     text-align: center;
-  }
-
-  .delete-btn {
-    font-size: 11px;
-    color: red;
-    cursor: pointer;
-    text-align: center;
-    padding-bottom: 10px;
-  }
-
-  .meta {
-    font-size: 11px;
-    color: #777;
-    text-align: center;
     padding-bottom: 5px;
+  }
+
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 8px 10px;
+    font-size: 11px;
+  }
+
+  .btn {
+    cursor: pointer;
+    color: #0077cc;
+  }
+
+  .delete {
+    color: red;
+  }
+
+  .select {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    transform: scale(1.2);
+    z-index: 2;
   }
 </style>
 </head>
 
 <body>
 
-<h1>Link Gallery</h1>
+<h1>Link Gallery Pro+</h1>
 
 <div class="form">
   <input id="title" placeholder="Title" />
-  <input id="url" placeholder="Main URL (https://...)" />
-  <input id="thumb" placeholder="Thumbnail Image URL" />
-  <input id="tags" placeholder="Tags (comma separated, e.g. steel, tekla, design)" />
+  <input id="url" placeholder="Main URL" />
+  <input id="thumb" placeholder="Thumbnail URL (optional)" />
+  <input id="tags" placeholder="Tags (comma separated)" />
   <button onclick="addItem()">Add</button>
 </div>
 
-<div class="search">
+<div class="toolbar">
   <input id="search" placeholder="Search titles or tags..." oninput="render()" />
+  <button onclick="bulkDelete()">Delete Selected</button>
+  <button onclick="clearAll()">Clear All</button>
 </div>
 
 <div class="grid" id="grid"></div>
 
 <script>
-  const STORAGE_KEY = "savedLinksTags";
+  const STORAGE_KEY = "savedLinksProPlus";
 
   function getItems() {
     return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -129,23 +146,20 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }
 
-  function normalizeTags(tagString) {
-    return tagString
+  function normalizeTags(str) {
+    return (str || "")
       .split(",")
       .map(t => t.trim().toLowerCase())
       .filter(Boolean);
   }
 
   function addItem() {
-    const title = document.getElementById("title").value.trim();
-    const url = document.getElementById("url").value.trim();
-    const thumb = document.getElementById("thumb").value.trim();
-    const tagsRaw = document.getElementById("tags").value;
+    const title = titleEl().value.trim();
+    const url = urlEl().value.trim();
+    const thumb = thumbEl().value.trim();
+    const tags = tagsEl().value;
 
-    if (!title || !url || !thumb) {
-      alert("Fill title, url and thumbnail");
-      return;
-    }
+    if (!title || !url) return alert("Title and URL are required");
 
     const items = getItems();
 
@@ -153,61 +167,113 @@
       id: Date.now(),
       title,
       url,
-      thumb,
-      tags: normalizeTags(tagsRaw)
+      thumb: thumb || null,
+      tags: normalizeTags(tags)
     });
 
     saveItems(items);
+    clearForm();
+    render();
+  }
 
-    document.getElementById("title").value = "";
-    document.getElementById("url").value = "";
-    document.getElementById("thumb").value = "";
-    document.getElementById("tags").value = "";
+  function editItem(id) {
+    let items = getItems();
+    const item = items.find(i => i.id === id);
+    if (!item) return;
 
+    const newTitle = prompt("Edit title", item.title);
+    const newUrl = prompt("Edit URL", item.url);
+    const newThumb = prompt("Edit thumbnail URL (leave blank for none)", item.thumb || "");
+    const newTags = prompt("Edit tags (comma separated)", item.tags.join(", "));
+
+    if (!newTitle || !newUrl) return;
+
+    item.title = newTitle.trim();
+    item.url = newUrl.trim();
+    item.thumb = newThumb.trim() || null;
+    item.tags = normalizeTags(newTags);
+
+    saveItems(items);
     render();
   }
 
   function deleteItem(id) {
-    let items = getItems().filter(i => i.id !== id);
-    saveItems(items);
+    saveItems(getItems().filter(i => i.id !== id));
     render();
   }
 
-  function matchesSearch(item, query) {
-    if (!query) return true;
+  function bulkDelete() {
+    const checked = document.querySelectorAll(".select:checked");
+    const ids = Array.from(checked).map(cb => Number(cb.dataset.id));
 
-    const q = query.toLowerCase();
+    if (!ids.length) return alert("No items selected");
 
-    const inTitle = item.title.toLowerCase().includes(q);
-    const inTags = item.tags.some(tag => tag.includes(q));
+    saveItems(getItems().filter(i => !ids.includes(i.id)));
+    render();
+  }
 
-    return inTitle || inTags;
+  function clearAll() {
+    if (!confirm("Delete everything?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    render();
+  }
+
+  function matches(item, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+
+    return item.title.toLowerCase().includes(q) ||
+           item.tags.some(t => t.includes(q));
   }
 
   function render() {
     const grid = document.getElementById("grid");
-    const search = document.getElementById("search").value.trim();
+    const q = searchEl().value.trim();
 
     grid.innerHTML = "";
 
-    const items = getItems().filter(item => matchesSearch(item, search));
+    getItems()
+      .filter(i => matches(i, q))
+      .forEach(item => {
+        const div = document.createElement("div");
+        div.className = "card";
 
-    items.forEach(item => {
-      const a = document.createElement("a");
-      a.className = "card";
-      a.href = item.url;
-      a.target = "_blank";
+        const thumbContent = item.thumb
+          ? `<img class="thumb" src="${item.thumb}" />`
+          : `<div class="thumb">No thumbnail</div>`;
 
-      a.innerHTML = `
-        <img src="${item.thumb}" />
-        <div class="card-title">${item.title}</div>
-        <div class="tags">${item.tags.join(", ")}</div>
-        <div class="delete-btn" onclick="event.preventDefault(); deleteItem(${item.id})">delete</div>
-      `;
+        div.innerHTML = `
+          <input class="select" type="checkbox" data-id="${item.id}" />
 
-      grid.appendChild(a);
-    });
+          <a href="${item.url}" target="_blank">
+            ${thumbContent}
+          </a>
+
+          <div class="card-title">${item.title}</div>
+          <div class="tags">${item.tags.join(", ")}</div>
+
+          <div class="controls">
+            <span class="btn" onclick="editItem(${item.id})">edit</span>
+            <span class="btn delete" onclick="deleteItem(${item.id})">delete</span>
+          </div>
+        `;
+
+        grid.appendChild(div);
+      });
   }
+
+  function clearForm() {
+    titleEl().value = "";
+    urlEl().value = "";
+    thumbEl().value = "";
+    tagsEl().value = "";
+  }
+
+  function titleEl() { return document.getElementById("title"); }
+  function urlEl() { return document.getElementById("url"); }
+  function thumbEl() { return document.getElementById("thumb"); }
+  function tagsEl() { return document.getElementById("tags"); }
+  function searchEl() { return document.getElementById("search"); }
 
   render();
 </script>
